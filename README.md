@@ -5,6 +5,25 @@ Thanks to the Overextended team, I managed to adapt this FiveM script to work in
 Door management resource, with compatibility for [rsg-core](https://github.com/Rexshack-RedM/rsg-core), [VORP](https://github.com/VORPCORE/vorp_core-lua) and [RedEM:RP](https://github.com/RedEM-RP/redem_roleplay).
 Successor to nui_doorlock with less scuff and more stuff.
 
+
+
+
+
+<img width="1225" height="1074" alt="oxdoorlock" src="https://github.com/user-attachments/assets/5edbd5ad-7fe4-4a64-a9eb-04a1ece70339" />
+
+
+
+
+<img width="1089" height="747" alt="oxdoorrrlock" src="https://github.com/user-attachments/assets/482914e3-40c7-4a7f-aced-dad565ffcadb" />
+
+
+
+
+<img width="1107" height="718" alt="oxdoorlockkkkkk" src="https://github.com/user-attachments/assets/c32be225-256a-41ed-827c-a4384bcca381" />
+
+
+
+
 ## Dependencies
 
 ### [oxmysql](https://github.com/overextended/oxmysql)
