@@ -1,1 +1,0 @@
-lockpick = { name = 'lockpick', label = 'Lockpick', weight = 100, type = 'item', image = 'lockpick.png', unique = false, useable = true, shouldClose = true, description = 'A worn set of tools used to work stubborn locks.' },
