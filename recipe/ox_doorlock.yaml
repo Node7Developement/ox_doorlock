@@ -2,7 +2,7 @@ $engine: 3
 $onesync: on
 name: ox_doorlock NODE7
 author: Overextended / NODE7 integration
-description: RedM door locking with NODE7 inventory, notifications and lockpick minigame.
+description: RedM door locking with NODE7 player-load lifecycle, restart relocking, inventory, notifications and lockpick minigame.
 tasks:
   - action: ensure_dir
     path: ./resources/[node7]/ox_doorlock

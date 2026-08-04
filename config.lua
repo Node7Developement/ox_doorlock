@@ -5,6 +5,13 @@ Config = {}
 ---Trigger a notification on the client when the door state is successfully updated.
 Config.Notify = true
 
+---Reset every configured door to the locked state whenever ox_doorlock starts.
+---This prevents unlocked runtime states from surviving a server or resource restart.
+Config.RelockOnRestart = true
+
+---Reject door data and interaction requests until NODE7 has a loaded character for the player.
+Config.RequirePlayerLoaded = true
+
 ---Create a persistent notification while in-range of a door, prompting to lock/unlock.
 Config.DrawTextUI = false
 

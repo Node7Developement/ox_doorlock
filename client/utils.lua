@@ -27,8 +27,10 @@ local function getDoorFromEntity(data)
     return door
 end
 
-exports('getClosestDoorId', function() return ClosestDoor?.id end)
-exports('getDoorIdFromEntity', function(entityId) return getDoorFromEntity(entityId)?.id end)
+exports('getClosestDoorId', function() return DoorlockPlayerLoaded and ClosestDoor?.id or nil end)
+exports('getDoorIdFromEntity', function(entityId)
+    return DoorlockPlayerLoaded and getDoorFromEntity(entityId)?.id or nil
+end)
 
 local function entityIsNotDoor(data)
     local entity = type(data) == 'number' and data or data.entity
@@ -64,18 +66,18 @@ local function getDoorFromTarget(data)
 end
 
 local function canPickLock(data)
-    if PickingLock then return false end
+    if not DoorlockPlayerLoaded or PickingLock then return false end
     return isDoorPickable(getDoorFromTarget(data))
 end
 
 local function canUnlockDoor(data)
-    if PickingLock then return false end
+    if not DoorlockPlayerLoaded or PickingLock then return false end
     local door = getDoorFromTarget(data)
     return door and door.state == 1
 end
 
 local function canLockDoor(data)
-    if PickingLock then return false end
+    if not DoorlockPlayerLoaded or PickingLock then return false end
     local door = getDoorFromTarget(data)
     return door and door.state == 0
 end
@@ -88,6 +90,7 @@ local function stopLockpickAnimation(animDict)
 end
 
 local function setDoorFromTarget(data, state)
+    if not DoorlockPlayerLoaded then return end
     local door = getDoorFromTarget(data)
     if not door then
         return Node7DoorNotify('This door is not registered.', 'error')
@@ -97,7 +100,7 @@ local function setDoorFromTarget(data, state)
 end
 
 local function startDoorLockpick(door)
-    if not door or PickingLock then return end
+    if not DoorlockPlayerLoaded or not door or PickingLock then return end
 
     if not isDoorPickable(door) then
         return Node7DoorNotify('This door cannot be lockpicked.', 'error')
@@ -198,6 +201,7 @@ local function findClosestPickableDoor(maxDistance)
 end
 
 local function pickClosestDoor()
+    if not DoorlockPlayerLoaded then return end
     local maxDistance = math.max(tonumber(Config.TargetDistance) or 2.5, 3.0)
     local door = findClosestPickableDoor(maxDistance)
 
@@ -209,7 +213,9 @@ local function pickClosestDoor()
 end
 
 exports('pickClosestDoor', pickClosestDoor)
-RegisterNetEvent('ox_doorlock:useLockpickItem', pickClosestDoor)
+RegisterNetEvent('ox_doorlock:useLockpickItem', function()
+    if DoorlockPlayerLoaded then pickClosestDoor() end
+end)
 
 local targetOptions = {
     {
@@ -242,6 +248,7 @@ local targetOptions = {
 }
 
 function RegisterDoorTargetEntity(entity)
+    if not DoorlockPlayerLoaded then return end
     entity = tonumber(entity)
     if not entity or entity == 0 or registeredTargetEntities[entity] then return end
     if GetResourceState('ox_target') ~= 'started' then return end
@@ -274,12 +281,15 @@ function UnregisterDoorTargetEntity(entity)
     registeredTargetEntities[entity] = nil
 end
 
+function CleanupDoorTargetEntities()
+    local entities = {}
+    for entity in pairs(registeredTargetEntities) do entities[#entities + 1] = entity end
+    for i = 1, #entities do UnregisterDoorTargetEntity(entities[i]) end
+end
+
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= cache.resource then return end
-
-    for entity in pairs(registeredTargetEntities) do
-        UnregisterDoorTargetEntity(entity)
-    end
+    CleanupDoorTargetEntities()
 end)
 
 local tempData = {}
@@ -309,11 +319,13 @@ local isAddingDoorlock = false
 
 RegisterNUICallback('notify', function(data, cb)
 	cb(1)
+    if not DoorlockPlayerLoaded then return end
 	Node7DoorNotify(data, 'info')
 end)
 
 RegisterNUICallback('createDoor', function(data, cb)
 	cb(1)
+    if not DoorlockPlayerLoaded then return SetNuiFocus(false, false) end
 	SetNuiFocus(false, false)
 
 	data.state = data.state and 1 or 0
@@ -342,6 +354,13 @@ RegisterNUICallback('createDoor', function(data, cb)
 		lib.showTextUI(locale('add_door_textui'))
 
 		repeat
+            if not DoorlockPlayerLoaded then
+                isAddingDoorlock = false
+                table.wipe(tempData)
+                lib.hideTextUI()
+                return
+            end
+
 			DisablePlayerFiring(cache.playerId, true)
 			DisableControlAction(0, 25, true)
 
@@ -425,11 +444,13 @@ end)
 
 RegisterNUICallback('deleteDoor', function(id, cb)
 	cb(1)
+    if not DoorlockPlayerLoaded then return end
 	TriggerServerEvent('ox_doorlock:editDoorlock', id)
 end)
 
 RegisterNUICallback('teleportToDoor', function(id, cb)
 	cb(1)
+    if not DoorlockPlayerLoaded or not doors or not doors[id] then return end
 	SetNuiFocus(false, false)
 	local doorCoords = doors[id].coords
 	if not doorCoords then return end
@@ -446,7 +467,7 @@ local pendingUiOpen = false
 local pendingUiId
 
 local function sendInitialUiData()
-    if nuiDataSent then return end
+    if not DoorlockPlayerLoaded or not doors or nuiDataSent then return false end
 
     SendNuiMessage(json.encode({
         action = 'updateDoorData',
@@ -459,10 +480,11 @@ local function sendInitialUiData()
     })
 
     nuiDataSent = true
+    return true
 end
 
 local function showUi(id)
-    sendInitialUiData()
+    if not sendInitialUiData() and not nuiDataSent then return end
     SetNuiFocus(true, true)
     SendNuiMessage(json.encode({
         action = 'setVisible',
@@ -483,7 +505,7 @@ RegisterNUICallback('ready', function(_, cb)
 end)
 
 local function openUi(id)
-    if source == '' or isAddingDoorlock then return end
+    if source == '' or isAddingDoorlock or not DoorlockPlayerLoaded or not doors then return end
 
     if not NuiHasLoaded then
         pendingUiOpen = true
@@ -495,11 +517,26 @@ local function openUi(id)
     showUi(id)
 end
 
+function ResetDoorlockUi()
+    nuiDataSent = false
+    pendingUiOpen = false
+    pendingUiId = nil
+    isAddingDoorlock = false
+    table.wipe(tempData)
+    SetNuiFocus(false, false)
+    if lib.isTextUIOpen and lib.isTextUIOpen() then lib.hideTextUI() end
+
+    if NuiHasLoaded then
+        SendNuiMessage(json.encode({ action = 'setVisible', data = false }))
+    end
+end
+
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName ~= cache.resource then return end
-    SetNuiFocus(false, false)
+    ResetDoorlockUi()
 end)
 
 RegisterNetEvent('ox_doorlock:triggeredCommand', function(closest)
+    if not DoorlockPlayerLoaded then return end
 	openUi(closest and ClosestDoor?.id or nil)
 end)

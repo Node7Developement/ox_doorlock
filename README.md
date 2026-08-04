@@ -1,99 +1,47 @@
-# [Ox Doorlock](https://github.com/overextended/ox_doorlock)
+# ox_doorlock — NODE7 RedM
 
-Thanks to the Overextended team, I managed to adapt this FiveM script to work in RedM. No more listing door hashes one by one, and make sure the game correctly recognizes the door object as a door. Here’s the [tutorial](https://youtu.be/bDoabIL_tpo?si=6sn0uwW2GrXivNEv) to make the game recognize it as a door.
+A RedM-only ox_doorlock build integrated with `node7-core`, `node7-inventory`, `node7-lockpick-minigame`, `ox_target`, `ox_lib`, and `oxmysql`.
 
-Door management resource, with compatibility for [rsg-core](https://github.com/Rexshack-RedM/rsg-core), [VORP](https://github.com/VORPCORE/vorp_core-lua) and [RedEM:RP](https://github.com/RedEM-RP/redem_roleplay).
-Successor to nui_doorlock with less scuff and more stuff.
+## Required start order
 
+```cfg
+ensure oxmysql
+ensure ox_lib
+ensure ox_target
+ensure node7-core
+ensure node7-inventory
+ensure node7-lockpick-minigame
+ensure ox_doorlock
+```
 
+## Player-load lifecycle
 
+The client remains inactive during connection, loading, and character selection. Door data, prompts, targets, proximity scans, lockpick actions, and the administrator interface start only after `Node7Core:Client:OnPlayerLoaded`. They are fully cleaned up on player unload or when `node7-charselect` opens.
 
+## Restart relocking
 
-<img width="1225" height="1074" alt="oxdoorlock" src="https://github.com/user-attachments/assets/5edbd5ad-7fe4-4a64-a9eb-04a1ece70339" />
-
-
-
-
-<img width="1089" height="747" alt="oxdoorrrlock" src="https://github.com/user-attachments/assets/482914e3-40c7-4a7f-aced-dad565ffcadb" />
-
-
-
-
-<img width="1107" height="718" alt="oxdoorlockkkkkk" src="https://github.com/user-attachments/assets/c32be225-256a-41ed-827c-a4384bcca381" />
-
-
-
-
-## Dependencies
-
-### [oxmysql](https://github.com/overextended/oxmysql)
-
-Doors are stored in a database for ease-of-use and to allow data to be easily cleared or shared.
-
-mysql-async is no longer supported.
-  - does not support error-catching (pcall)
-  - people use older versions which do not support parameters as arrays
-  - it isn't maintained and has issues that will never be resolved
-
-### [ox_lib](https://github.com/overextended/ox_lib) (v2.3.0 or higher)
-
-Used for some UI elements (i.e. notifications, progress circle, input), and cache.
-
-### [ox_target](https://github.com/overextended/ox_target) (preferred) or [qtarget](https://github.com/overextended/qtarget) (deprecated)
-
-(Optional) Used for lockpicking.
+`Config.RelockOnRestart = true` resets every stored door to state `1` (locked) before the server exposes the door list. The locked baseline is also written back to the database.
 
 ## Usage
 
-Use the `/doorlock` command to open the UI and enter the settings for your new door.
-Once you confirm the settings, activate your targeting resource (typically LALT) to select the entity (or entities) to use.
+Use `/doorlock` after loading a character to create or edit doors. Use the configured RedM interaction prompt or `ox_target` actions to lock, unlock, or pick registered doors.
 
-Adding any arguments after the command will open the closest door to you, to easily modify it.
-
-## Conversion
-
-Placing nui_doorlock config files into the `convert` folder will convert the data and insert it into the database.
-Success is _not_ guaranteed if using a fork on nui_doorlock, like the qb version.
-
-## Client API
-
-- Use the closest door. Still performs server-side checks, so may fail.
+## API
 
 ```lua
 exports.ox_doorlock:useClosestDoor()
-```
-
-- Pick the lock of the closest door. Still performs server-side checks, so may fail.
-
-```lua
 exports.ox_doorlock:pickClosestDoor()
+local door = exports.ox_doorlock:getDoor(1)
+exports.ox_doorlock:setDoorState(1, 1)
 ```
 
-## Server API
+## NODE7 integration
 
-- Get data for door
-
-```lua
-local mrpd_locker_rooms = exports.ox_doorlock:getDoor(1)
-local mrpd_locker_rooms = exports.ox_doorlock:getDoorFromName('mrpd locker rooms')
-```
-
-- Set door state (0: unlocked, 1: locked)
-
-```lua
-TriggerEvent('ox_doorlock:setState', mrpd_locker_rooms.id, state)
-```
-
-- Listen for event when door is toggled
-
-```lua
-AddEventHandler('ox_doorlock:stateChanged', function(source, doorId, state, usedItem)
-    if usedItem == 'trainticket' then
-        local xPlayer = ESX.GetPlayerFromId(source)
-        xPlayer.removeInventoryItem(usedItem, 1)
-    end
-end)
-```
+- NODE7 core notifications and character/job/gang authorization
+- NODE7 inventory item checks and lockpick removal
+- NODE7 lockpick minigame sessions with server validation
+- RedM prompts and door natives
+- Restart relocking and true player-load activation
 
 ## Door Settings
 

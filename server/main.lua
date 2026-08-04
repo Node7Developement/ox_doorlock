@@ -6,11 +6,21 @@ end
 if not lib.checkDependency('oxmysql', '2.4.0') then return end
 if not lib.checkDependency('ox_lib', '3.14.0') then return end
 
-lib.versionCheck('overextended/ox_doorlock')
 require 'server.convert'
 
 local utils = require 'server.utils'
 local doors = {}
+
+
+local function getLoadedPlayer(playerId)
+    playerId = tonumber(playerId)
+    if not playerId or playerId <= 0 then return end
+    return GetPlayer(playerId)
+end
+
+local function playerIsLoaded(playerId)
+    return Config.RequirePlayerLoaded == false or getLoadedPlayer(playerId) ~= nil
+end
 
 local function encodeData(door)
 	local double = door.doors
@@ -358,18 +368,42 @@ local sql = LoadResourceFile(cache.resource, 'sql/ox_doorlock.sql')
 if sql then MySQL.query(sql) end
 
 MySQL.ready(function()
-	while Config.DoorList do Wait(100) end
+    while Config.DoorList do Wait(100) end
 
-	local response = MySQL.query.await('SELECT `id`, `name`, `data` FROM `ox_doorlock`')
+    local response = MySQL.query.await('SELECT `id`, `name`, `data` FROM `ox_doorlock`')
+    local relockQueries = {}
+    local relocked = 0
 
-	for i = 1, #response do
-		local door = response[i]
-		createDoor(door.id, json.decode(door.data), door.name)
-	end
+    for i = 1, #response do
+        local row = response[i]
+        local data = json.decode(row.data)
 
-	isLoaded = true
+        if type(data) == 'table' then
+            if Config.RelockOnRestart and data.state ~= 1 then
+                data.state = 1
+                relocked = relocked + 1
+                relockQueries[#relockQueries + 1] = {
+                    query = 'UPDATE `ox_doorlock` SET `data` = ? WHERE `id` = ?',
+                    values = { encodeData(data), row.id },
+                }
+            end
 
-	TriggerEvent('ox_doorlock:loaded')
+            createDoor(row.id, data, row.name)
+        else
+            print(('[ox_doorlock] Ignored invalid door data for id %s.'):format(row.id))
+        end
+    end
+
+    if #relockQueries > 0 then
+        local success = MySQL.transaction.await(relockQueries)
+        if not success then
+            print('[ox_doorlock] Failed to persist restart relock states; live doors are still locked for this session.')
+        end
+    end
+
+    isLoaded = true
+    print(('[ox_doorlock] Loaded %s door(s); %s door(s) reset to locked.'):format(#response, relocked))
+    TriggerEvent('ox_doorlock:loaded')
 end)
 
 ---@param id number
@@ -377,6 +411,9 @@ end)
 ---@param lockpick? boolean
 ---@return boolean
 local function setDoorState(id, state, lockpick)
+    local playerId = tonumber(source)
+    if playerId and playerId > 0 and not playerIsLoaded(playerId) then return false end
+
 	local door = doors[id]
 
 	state = (state == 1 or state == 0) and state or (state and 1 or 0)
@@ -464,13 +501,16 @@ RegisterNetEvent('ox_doorlock:cancelLockpick', function(doorId, token)
 end)
 
 
-lib.callback.register('ox_doorlock:getDoors', function()
-	while not isLoaded do Wait(100) end
+lib.callback.register('ox_doorlock:getDoors', function(playerId)
+    if not playerIsLoaded(playerId) then return false end
+    while not isLoaded do Wait(100) end
+    if not playerIsLoaded(playerId) then return false end
 
-	return doors, sounds
+    return doors, sounds
 end)
 
 RegisterNetEvent('ox_doorlock:editDoorlock', function(id, data)
+    if not playerIsLoaded(source) then return end
 	if IsPlayerAceAllowed(source, 'command.doorlock') then
 		if data then
 			if not data.coords then
@@ -513,6 +553,7 @@ lib.addCommand('doorlock', {
 	},
 	restricted = Config.CommandPrincipal
 }, function(source, args)
+    if not playerIsLoaded(source) then return end
 	TriggerClientEvent('ox_doorlock:triggeredCommand', source, args.closest)
 end)
 
@@ -533,7 +574,7 @@ local function registerUsableLockpicks()
 
         Node7Core.Functions.CreateUseableItem(itemName, function(playerId, itemData)
             playerId = tonumber(playerId)
-            if not playerId then return end
+            if not playerId or not playerIsLoaded(playerId) then return end
 
             if not exports['node7-inventory']:HasItem(playerId, itemName, 1) then
                 return Node7Core.Functions.Notify(playerId, {
@@ -569,6 +610,6 @@ RegisterCommand('doorpicktest', function(playerId)
         return print('[ox_doorlock] /doorpicktest must be used in game.')
     end
 
-    if not IsPlayerAceAllowed(playerId, 'ox_doorlock.test') then return end
+    if not IsPlayerAceAllowed(playerId, 'ox_doorlock.test') or not playerIsLoaded(playerId) then return end
     TriggerClientEvent('ox_doorlock:useLockpickItem', playerId)
 end, false)
