@@ -17,4 +17,6 @@ Import `sql/ox_doorlock.sql` once for a new database. Add the item from `ITEM.lu
 
 ## Restart behavior
 
-With `Config.RelockOnRestart = true`, all stored doors are reset to locked before players receive the door list. The resource remains inactive during charselect and initializes only after the NODE7 player-loaded event.
+With `Config.RelockOnRestart = true`, all stored doors are reset to locked when the resource starts. The management interface opens only through `/doorlock`.
+
+> RedM note: GTA's `DoorSystemSetHoldOpen` native is not used. Door locking and unlocking are handled with RedM-supported door-state natives.

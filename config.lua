@@ -9,8 +9,6 @@ Config.Notify = true
 ---This prevents unlocked runtime states from surviving a server or resource restart.
 Config.RelockOnRestart = true
 
----Reject door data and interaction requests until NODE7 has a loaded character for the player.
-Config.RequirePlayerLoaded = true
 
 ---Create a persistent notification while in-range of a door, prompting to lock/unlock.
 Config.DrawTextUI = false

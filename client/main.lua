@@ -1,5 +1,5 @@
 local function Node7DoorNotify(description, notifyType, title, duration)
-    if not DoorlockPlayerLoaded then return false end
+    if not DoorlockReady then return false end
 
     return exports['node7-core']:Notify({
         title = title or 'DOOR LOCK',
@@ -66,14 +66,13 @@ local function getDoorHandPoint(entity)
 end
 
 local nearbyDoors = {}
-local lifecycleToken = 0
-local activationPending = false
+local initializationPending = false
 local doorPromptGroup
 local doorPrompt
 local promptState
 local promptGroupLabel
 
-DoorlockPlayerLoaded = false
+DoorlockReady = false
 doors = nil
 DoorEntity = {}
 ClosestDoor = nil
@@ -90,8 +89,14 @@ local function eachDoorHash(door, callback)
     end
 end
 
+-- DoorSystemSetHoldOpen is a GTA/FiveM global and is not exposed by RedM.
+-- RedM door state is managed through DoorSystemSetDoorState; holdOpen is ignored safely.
+local function setDoorHoldOpen(_, _)
+    return false
+end
+
 local function createDoor(door)
-    if not DoorlockPlayerLoaded or not door or not door.coords then return end
+    if not DoorlockReady or not door or not door.coords then return end
 
     door.zone = ZoneList[GetMapZoneAtCoords(door.coords.x, door.coords.y, door.coords.z, 10)]
 
@@ -115,7 +120,7 @@ local function destroyPrompt()
 end
 
 local function createPrompt()
-    if doorPrompt or not DoorlockPlayerLoaded or not Config.DoorPrompt or not Config.DoorPrompt.Enabled then return end
+    if doorPrompt or not DoorlockReady or not Config.DoorPrompt or not Config.DoorPrompt.Enabled then return end
 
     doorPromptGroup = GetRandomIntInRange(0, 0xffffff)
     promptGroupLabel = CreateVarString(10, 'LITERAL_STRING', Config.DoorPrompt.GroupLabel or 'DOOR')
@@ -161,15 +166,14 @@ local function unregisterDoorRuntime(door)
     end
 
     eachDoorHash(door, function(hash)
-        DoorSystemSetHoldOpen(hash, false)
+        setDoorHoldOpen(hash, false)
         RemoveDoorFromSystem(hash)
     end)
 end
 
-local function deactivateDoorlock()
-    lifecycleToken = lifecycleToken + 1
-    activationPending = false
-    DoorlockPlayerLoaded = false
+local function shutdownDoorlock()
+    DoorlockReady = false
+    initializationPending = false
     ClosestDoor = nil
     PickingLock = false
 
@@ -189,9 +193,9 @@ local function deactivateDoorlock()
     destroyPrompt()
 end
 
-local function startDoorScan(token)
+local function startDoorScan()
     CreateThread(function()
-        while DoorlockPlayerLoaded and lifecycleToken == token and doors do
+        while DoorlockReady and doors do
             table.wipe(nearbyDoors)
             local ped = cache.ped
             local coords = ped and ped ~= 0 and GetEntityCoords(ped)
@@ -256,7 +260,7 @@ end
 local lastTriggered = 0
 
 local function useClosestDoor()
-    if not DoorlockPlayerLoaded or not ClosestDoor then return false end
+    if not DoorlockReady or not ClosestDoor then return false end
 
     local gameTimer = GetGameTimer()
     if gameTimer - lastTriggered <= 500 then return false end
@@ -266,7 +270,7 @@ local function useClosestDoor()
     return true
 end
 
-local function startInteractionLoop(token)
+local function startInteractionLoop()
     CreateThread(function()
         local lockDoor = locale('lock_door')
         local unlockDoor = locale('unlock_door')
@@ -280,7 +284,7 @@ local function startInteractionLoop(token)
                 if texture and not loaded[texture] then
                     RequestStreamedTextureDict(texture, true)
                     local timeout = GetGameTimer() + 5000
-                    while DoorlockPlayerLoaded and lifecycleToken == token and not HasStreamedTextureDictLoaded(texture) and GetGameTimer() < timeout do
+                    while DoorlockReady and not HasStreamedTextureDictLoaded(texture) and GetGameTimer() < timeout do
                         Wait(0)
                     end
                     loaded[texture] = true
@@ -292,7 +296,7 @@ local function startInteractionLoop(token)
         local ClearDrawOrigin = ClearDrawOrigin
         local DrawDoorSprite = drawSprite and DrawSprite
 
-        while DoorlockPlayerLoaded and lifecycleToken == token do
+        while DoorlockReady do
             local num = #nearbyDoors
             ClosestDoor = nil
 
@@ -352,49 +356,37 @@ local function startInteractionLoop(token)
     end)
 end
 
-local function activateDoorlock()
-    if DoorlockPlayerLoaded or activationPending then return end
-    activationPending = true
-    local requestToken = lifecycleToken
+local function initializeDoorlock()
+    if DoorlockReady or initializationPending then return end
+    initializationPending = true
 
     CreateThread(function()
         local data
 
-        for _ = 1, 40 do
-            if lifecycleToken ~= requestToken or DoorlockPlayerLoaded then
-                activationPending = false
-                return
-            end
-
+        while not DoorlockReady do
             data = lib.callback.await('ox_doorlock:getDoors', false)
             if data then break end
             Wait(250)
         end
 
-        activationPending = false
-        if lifecycleToken ~= requestToken or DoorlockPlayerLoaded or not data then return end
+        initializationPending = false
+        if DoorlockReady or not data then return end
 
-        DoorlockPlayerLoaded = true
-        lifecycleToken = lifecycleToken + 1
-        local token = lifecycleToken
         doors = data
+        DoorlockReady = true
         table.wipe(nearbyDoors)
         table.wipe(DoorEntity)
 
         for _, door in pairs(doors) do createDoor(door) end
 
         createPrompt()
-        startDoorScan(token)
-        startInteractionLoop(token)
+        startDoorScan()
+        startInteractionLoop()
     end)
 end
 
-RegisterNetEvent('Node7Core:Client:OnPlayerLoaded', activateDoorlock)
-RegisterNetEvent('Node7Core:Client:OnPlayerUnload', deactivateDoorlock)
-RegisterNetEvent('node7-charselect:client:chooseChar', deactivateDoorlock)
-
 RegisterNetEvent('ox_doorlock:setState', function(id, state, source, data)
-    if not DoorlockPlayerLoaded or not doors then return end
+    if not DoorlockReady or not doors then return end
 
     if data then
         doors[id] = data
@@ -415,12 +407,12 @@ RegisterNetEvent('ox_doorlock:setState', function(id, state, source, data)
     door.state = state
     eachDoorHash(door, function(hash)
         DoorSystemSetDoorState(hash, state, false, false)
-        if door.holdOpen then DoorSystemSetHoldOpen(hash, state == 0) end
+        if door.holdOpen then setDoorHoldOpen(hash, state == 0) end
     end)
 
     if state == 1 then
         local timeout = GetGameTimer() + 2500
-        while DoorlockPlayerLoaded and GetGameTimer() < timeout do
+        while DoorlockReady and GetGameTimer() < timeout do
             local closed = true
             eachDoorHash(door, function(hash)
                 if not IsDoorClosed(hash) then closed = false end
@@ -449,7 +441,7 @@ RegisterNetEvent('ox_doorlock:setState', function(id, state, source, data)
 end)
 
 RegisterNetEvent('ox_doorlock:editDoorlock', function(id, data)
-    if source == '' or not DoorlockPlayerLoaded or not doors then return end
+    if source == '' or not DoorlockReady or not doors then return end
 
     local door = doors[id]
     if not door then
@@ -483,7 +475,7 @@ RegisterNetEvent('ox_doorlock:editDoorlock', function(id, data)
 end)
 
 lib.callback.register('ox_doorlock:inputPassCode', function()
-    if not DoorlockPlayerLoaded then return end
+    if not DoorlockReady then return end
     return ClosestDoor and ClosestDoor.passcode and lib.inputDialog(locale('door_lock'), {
         { type = 'input', label = locale('passcode'), password = true, icon = 'lock' },
     })?[1]
@@ -491,33 +483,20 @@ end)
 
 exports('useClosestDoor', useClosestDoor)
 exports('getClosestDoor', function()
-    return DoorlockPlayerLoaded and ClosestDoor or nil
+    return DoorlockReady and ClosestDoor or nil
 end)
-
-local function currentNode7PlayerLoaded()
-    local ok, core = pcall(function() return exports['node7-core']:GetCoreObject() end)
-    if not ok or not core or not core.Functions or not core.Functions.GetPlayerData then return false end
-
-    local success, playerData = pcall(function() return core.Functions.GetPlayerData() end)
-    if not success or type(playerData) ~= 'table' then return false end
-
-    if playerData.loggedIn == false or playerData.isLoggedIn == false then return false end
-
-    return playerData.citizenid ~= nil
-        or playerData.charid ~= nil
-        or playerData.characterId ~= nil
-end
 
 AddEventHandler('onClientResourceStart', function(resourceName)
     if resourceName ~= cache.resource then return end
 
-    CreateThread(function()
-        Wait(500)
-        if currentNode7PlayerLoaded() then activateDoorlock() end
-    end)
+    -- Keep the management NUI hidden on resource start. Door data initializes
+    -- independently; the editor opens only from the /doorlock command event.
+    SetNuiFocus(false, false)
+    if ResetDoorlockUi then ResetDoorlockUi() end
+    initializeDoorlock()
 end)
 
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName ~= cache.resource then return end
-    deactivateDoorlock()
+    shutdownDoorlock()
 end)

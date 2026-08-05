@@ -491,14 +491,31 @@
       audio.play().catch(() => {});
     } else if (message.action === 'setSoundFiles') {
       sounds = Array.isArray(data) ? data : [''];
-    } else if (message.action === 'setVisible') {
+    } else if (message.action === 'closeDoorEditor') {
+      visible = false; modal = null; route = 'doors'; render();
+    } else if (message.action === 'openDoorEditor') {
       visible = true; modal = null;
       if (data === undefined || data === null) route = 'doors';
       else {
         const door = findDoor(data);
         if (door) { current = normalizeDoor(door); route = 'settings'; tab = 'general'; }
+        else route = 'doors';
       }
       render();
+    } else if (message.action === 'setVisible') {
+      // Legacy compatibility: a false payload is a close command, never an open command.
+      if (data === false) {
+        visible = false; modal = null; route = 'doors'; render();
+      } else {
+        visible = true; modal = null;
+        if (data === undefined || data === null) route = 'doors';
+        else {
+          const door = findDoor(data);
+          if (door) { current = normalizeDoor(door); route = 'settings'; tab = 'general'; }
+          else route = 'doors';
+        }
+        render();
+      }
     } else if (message.action === 'updateDoorData') {
       if (typeof data === 'number') doors = doors.filter((door) => Number(door.id) !== Number(data));
       else if (data && Object.prototype.hasOwnProperty.call(data, 'id')) {

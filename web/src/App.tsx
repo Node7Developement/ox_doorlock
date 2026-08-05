@@ -54,9 +54,10 @@ const App: React.FC = () => {
 
   useNuiEvent('setSoundFiles', (data: string[]) => setSounds(data));
 
-  useNuiEvent('setVisible', (data: number) => {
+  const openDoorEditor = (data?: number) => {
     setVisible(true);
-    if (data === undefined) return navigate('/');
+    if (data === undefined || data === null) return navigate('/');
+
     for (let i = 0; i < doors.length; i++) {
       if (doors[i].id === data) {
         useStore.setState(convertData(doors[i]), true);
@@ -64,6 +65,23 @@ const App: React.FC = () => {
         break;
       }
     }
+  };
+
+  useNuiEvent('openDoorEditor', (data?: number) => openDoorEditor(data));
+  useNuiEvent('closeDoorEditor', () => {
+    setVisible(false);
+    navigate('/');
+  });
+
+  // Backward-compatible guard: false must always mean hidden.
+  useNuiEvent('setVisible', (data: number | false | undefined) => {
+    if (data === false) {
+      setVisible(false);
+      navigate('/');
+      return;
+    }
+
+    openDoorEditor(data);
   });
 
   useNuiEvent('updateDoorData', (data: DoorColumn | number) => {

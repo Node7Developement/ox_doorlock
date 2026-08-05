@@ -8,11 +8,11 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 
 --[[ Resource Information ]]--
 name 'ox_doorlock'
-version '1.18.0-node7.6'
+version '1.18.0-node7.9'
 license 'GPL-3.0-or-later'
 author 'Overextended'
 repository 'https://github.com/overextended/ox_doorlock'
-description 'NODE7 RedM door locking with restart relocking, true player-load lifecycle, targets, inventory, and lockpick integration.'
+description 'NODE7 RedM door locking with restart relocking, command-only management UI, targets, inventory, and lockpick integration.'
 
 --[[ Manifest ]]--
 shared_scripts {

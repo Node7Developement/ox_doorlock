@@ -14,7 +14,6 @@
 ---@class DoorlockConfig
 ---@field Notify boolean
 ---@field RelockOnRestart boolean
----@field RequirePlayerLoaded boolean
 ---@field DrawTextUI boolean
 ---@field CommandPrincipal string
 ---@field PlayerAceAuthorised boolean

@@ -12,15 +12,6 @@ local utils = require 'server.utils'
 local doors = {}
 
 
-local function getLoadedPlayer(playerId)
-    playerId = tonumber(playerId)
-    if not playerId or playerId <= 0 then return end
-    return GetPlayer(playerId)
-end
-
-local function playerIsLoaded(playerId)
-    return Config.RequirePlayerLoaded == false or getLoadedPlayer(playerId) ~= nil
-end
 
 local function encodeData(door)
 	local double = door.doors
@@ -411,9 +402,6 @@ end)
 ---@param lockpick? boolean
 ---@return boolean
 local function setDoorState(id, state, lockpick)
-    local playerId = tonumber(source)
-    if playerId and playerId > 0 and not playerIsLoaded(playerId) then return false end
-
 	local door = doors[id]
 
 	state = (state == 1 or state == 0) and state or (state and 1 or 0)
@@ -501,16 +489,12 @@ RegisterNetEvent('ox_doorlock:cancelLockpick', function(doorId, token)
 end)
 
 
-lib.callback.register('ox_doorlock:getDoors', function(playerId)
-    if not playerIsLoaded(playerId) then return false end
+lib.callback.register('ox_doorlock:getDoors', function()
     while not isLoaded do Wait(100) end
-    if not playerIsLoaded(playerId) then return false end
-
     return doors, sounds
 end)
 
 RegisterNetEvent('ox_doorlock:editDoorlock', function(id, data)
-    if not playerIsLoaded(source) then return end
 	if IsPlayerAceAllowed(source, 'command.doorlock') then
 		if data then
 			if not data.coords then
@@ -553,7 +537,6 @@ lib.addCommand('doorlock', {
 	},
 	restricted = Config.CommandPrincipal
 }, function(source, args)
-    if not playerIsLoaded(source) then return end
 	TriggerClientEvent('ox_doorlock:triggeredCommand', source, args.closest)
 end)
 
@@ -574,7 +557,7 @@ local function registerUsableLockpicks()
 
         Node7Core.Functions.CreateUseableItem(itemName, function(playerId, itemData)
             playerId = tonumber(playerId)
-            if not playerId or not playerIsLoaded(playerId) then return end
+            if not playerId then return end
 
             if not exports['node7-inventory']:HasItem(playerId, itemName, 1) then
                 return Node7Core.Functions.Notify(playerId, {
@@ -610,6 +593,6 @@ RegisterCommand('doorpicktest', function(playerId)
         return print('[ox_doorlock] /doorpicktest must be used in game.')
     end
 
-    if not IsPlayerAceAllowed(playerId, 'ox_doorlock.test') or not playerIsLoaded(playerId) then return end
+    if not IsPlayerAceAllowed(playerId, 'ox_doorlock.test') then return end
     TriggerClientEvent('ox_doorlock:useLockpickItem', playerId)
 end, false)
