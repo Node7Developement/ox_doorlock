@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/30724475/README.md)
 # ox_doorlock — NODE7 RedM
 
 A RedM-only ox_doorlock build integrated with `node7-core`, `node7-inventory`, `node7-lockpick-minigame`, `ox_target`, `ox_lib`, and `oxmysql`.
